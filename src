@@ -1,0 +1,457 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, font
+import datetime
+import json
+import os
+
+class ModernTodoApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("To-Do App")
+        self.root.geometry("500x650")
+        self.root.resizable(False, False)
+        
+        # Color scheme
+        self.bg_color = "#2c3e50"  # Dark blue-gray
+        self.accent_color = "#3498db"  # Blue
+        self.accent_hover = "#2980b9"  # Darker blue
+        self.text_color = "#ecf0f1"  # Light gray
+        self.success_color = "#2ecc71"  # Green
+        self.danger_color = "#e74c3c"  # Red
+        self.card_bg = "#34495e"  # Slightly lighter than bg
+        
+        self.root.config(bg=self.bg_color)
+        
+        # Data storage
+        self.tasks = []
+        self.completed_tasks = []
+        self.load_tasks()
+        
+        # Custom fonts
+        self.title_font = font.Font(family="Helvetica", size=20, weight="bold")
+        self.label_font = font.Font(family="Helvetica", size=12)
+        self.button_font = font.Font(family="Helvetica", size=10, weight="bold")
+        self.task_font = font.Font(family="Helvetica", size=11)
+        
+        # Create UI elements
+        self.create_widgets()
+        self.update_task_list()
+        self.update_stats()
+    
+    def create_widgets(self):
+        # Header frame
+        header_frame = tk.Frame(self.root, bg=self.bg_color)
+        header_frame.pack(fill=tk.X, pady=10)
+        
+        # Title with icon
+        title_label = tk.Label(
+            header_frame, 
+            text="✓ My Tasks", 
+            font=self.title_font,
+            bg=self.bg_color,
+            fg=self.text_color
+        )
+        title_label.pack()
+        
+        # Date display
+        date_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+        date_label = tk.Label(
+            header_frame,
+            text=date_str,
+            font=self.label_font,
+            bg=self.bg_color,
+            fg=self.text_color
+        )
+        date_label.pack()
+        
+        # Main container
+        main_container = tk.Frame(self.root, bg=self.bg_color)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Input frame
+        input_frame = tk.Frame(main_container, bg=self.card_bg, relief=tk.RAISED, bd=1)
+        input_frame.pack(fill=tk.X, pady=10, padx=5)
+        
+        # Task entry
+        self.task_entry = tk.Entry(
+            input_frame,
+            width=40,
+            font=self.task_font,
+            bg=self.bg_color,
+            fg=self.text_color,
+            insertbackground=self.text_color,
+            relief=tk.FLAT,
+            bd=10
+        )
+        self.task_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=10)
+        self.task_entry.bind("<Return>", lambda event: self.add_task())
+        
+        # Add button
+        self.add_button = tk.Button(
+            input_frame,
+            text="Add",
+            width=10,
+            command=self.add_task,
+            font=self.button_font,
+            bg=self.accent_color,
+            fg=self.text_color,
+            activebackground=self.accent_hover,
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.add_button.pack(side=tk.RIGHT, padx=10, pady=10)
+        
+        # Stats frame
+        stats_frame = tk.Frame(main_container, bg=self.bg_color)
+        stats_frame.pack(fill=tk.X, pady=5)
+        
+        self.stats_label = tk.Label(
+            stats_frame,
+            text="",
+            font=self.label_font,
+            bg=self.bg_color,
+            fg=self.text_color
+        )
+        self.stats_label.pack(side=tk.LEFT)
+        
+        # Task list frame
+        list_frame = tk.Frame(main_container, bg=self.card_bg, relief=tk.RAISED, bd=1)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=10, padx=5)
+        
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(list_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Style the notebook
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure("TNotebook", background=self.card_bg, borderwidth=0)
+        style.configure("TNotebook.Tab", padding=[20, 10], background=self.bg_color, foreground=self.text_color)
+        style.map("TNotebook.Tab", background=[("selected", self.accent_color)])
+        
+        # Active tasks tab
+        active_frame = tk.Frame(self.notebook, bg=self.bg_color)
+        self.notebook.add(active_frame, text="Active Tasks")
+        
+        # Active tasks listbox with scrollbar
+        active_list_frame = tk.Frame(active_frame, bg=self.bg_color)
+        active_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.task_listbox = tk.Listbox(
+            active_list_frame,
+            width=50,
+            height=15,
+            font=self.task_font,
+            bg=self.bg_color,
+            fg=self.text_color,
+            selectbackground=self.accent_color,
+            selectforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            activestyle="none",
+            highlightthickness=0
+        )
+        
+        active_scrollbar = tk.Scrollbar(
+            active_list_frame,
+            command=self.task_listbox.yview,
+            bg=self.bg_color,
+            troughcolor=self.card_bg,
+            activebackground=self.accent_color
+        )
+        self.task_listbox.config(yscrollcommand=active_scrollbar.set)
+        
+        self.task_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        active_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Completed tasks tab
+        completed_frame = tk.Frame(self.notebook, bg=self.bg_color)
+        self.notebook.add(completed_frame, text="Completed")
+        
+        # Completed tasks listbox with scrollbar
+        completed_list_frame = tk.Frame(completed_frame, bg=self.bg_color)
+        completed_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.completed_listbox = tk.Listbox(
+            completed_list_frame,
+            width=50,
+            height=15,
+            font=self.task_font,
+            bg=self.bg_color,
+            fg=self.text_color,
+            selectbackground=self.accent_color,
+            selectforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            activestyle="none",
+            highlightthickness=0
+        )
+        
+        completed_scrollbar = tk.Scrollbar(
+            completed_list_frame,
+            command=self.completed_listbox.yview,
+            bg=self.bg_color,
+            troughcolor=self.card_bg,
+            activebackground=self.accent_color
+        )
+        self.completed_listbox.config(yscrollcommand=completed_scrollbar.set)
+        
+        self.completed_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        completed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Button frame
+        button_frame = tk.Frame(main_container, bg=self.bg_color)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        # Complete button
+        self.complete_button = tk.Button(
+            button_frame,
+            text="Complete",
+            width=10,
+            command=self.complete_task,
+            font=self.button_font,
+            bg=self.success_color,
+            fg=self.text_color,
+            activebackground="#27ae60",
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.complete_button.pack(side=tk.LEFT, padx=5)
+        
+        # Edit button
+        self.edit_button = tk.Button(
+            button_frame,
+            text="Edit",
+            width=10,
+            command=self.edit_task,
+            font=self.button_font,
+            bg="#f39c12",
+            fg=self.text_color,
+            activebackground="#e67e22",
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.edit_button.pack(side=tk.LEFT, padx=5)
+        
+        # Delete button
+        self.delete_button = tk.Button(
+            button_frame,
+            text="Delete",
+            width=10,
+            command=self.delete_task,
+            font=self.button_font,
+            bg=self.danger_color,
+            fg=self.text_color,
+            activebackground="#c0392b",
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.delete_button.pack(side=tk.LEFT, padx=5)
+        
+        # Clear completed button
+        self.clear_button = tk.Button(
+            button_frame,
+            text="Clear All",
+            width=10,
+            command=self.clear_completed,
+            font=self.button_font,
+            bg="#7f8c8d",
+            fg=self.text_color,
+            activebackground="#95a5a6",
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.clear_button.pack(side=tk.LEFT, padx=5)
+        
+        # Exit button
+        self.exit_button = tk.Button(
+            button_frame,
+            text="Exit",
+            width=10,
+            command=self.exit_app,
+            font=self.button_font,
+            bg="#34495e",
+            fg=self.text_color,
+            activebackground="#2c3e50",
+            activeforeground=self.text_color,
+            relief=tk.FLAT,
+            bd=0,
+            cursor="hand2"
+        )
+        self.exit_button.pack(side=tk.RIGHT, padx=5)
+    
+    def add_task(self):
+        task = self.task_entry.get().strip()
+        if task:
+            self.tasks.append(task)
+            self.update_task_list()
+            self.update_stats()
+            self.task_entry.delete(0, tk.END)
+            self.save_tasks()
+        else:
+            messagebox.showwarning("Warning", "Please enter a task.")
+    
+    def delete_task(self):
+        try:
+            if self.notebook.index("current") == 0:  # Active tasks tab
+                selected_index = self.task_listbox.curselection()[0]
+                deleted = self.tasks.pop(selected_index)
+                self.update_task_list()
+                self.update_stats()
+                self.save_tasks()
+                messagebox.showinfo("Deleted", f"Task '{deleted}' deleted.")
+            else:  # Completed tasks tab
+                selected_index = self.completed_listbox.curselection()[0]
+                deleted = self.completed_tasks.pop(selected_index)
+                self.update_task_list()
+                self.update_stats()
+                self.save_tasks()
+                messagebox.showinfo("Deleted", f"Task '{deleted}' deleted.")
+        except IndexError:
+            messagebox.showwarning("Warning", "Please select a task to delete.")
+    
+    def complete_task(self):
+        try:
+            selected_index = self.task_listbox.curselection()[0]
+            completed = self.tasks.pop(selected_index)
+            self.completed_tasks.append(completed)
+            self.update_task_list()
+            self.update_stats()
+            self.save_tasks()
+            messagebox.showinfo("Completed", f"Task '{completed}' marked as completed.")
+        except IndexError:
+            messagebox.showwarning("Warning", "Please select a task to complete.")
+    
+    def edit_task(self):
+        try:
+            if self.notebook.index("current") == 0:  # Active tasks tab
+                selected_index = self.task_listbox.curselection()[0]
+                current_task = self.tasks[selected_index]
+                
+                # Create edit dialog
+                edit_window = tk.Toplevel(self.root)
+                edit_window.title("Edit Task")
+                edit_window.geometry("400x150")
+                edit_window.config(bg=self.bg_color)
+                edit_window.resizable(False, False)
+                
+                tk.Label(
+                    edit_window,
+                    text="Edit task:",
+                    font=self.label_font,
+                    bg=self.bg_color,
+                    fg=self.text_color
+                ).pack(pady=10)
+                
+                edit_entry = tk.Entry(
+                    edit_window,
+                    width=40,
+                    font=self.task_font,
+                    bg=self.bg_color,
+                    fg=self.text_color,
+                    insertbackground=self.text_color
+                )
+                edit_entry.pack(pady=10)
+                edit_entry.insert(0, current_task)
+                edit_entry.focus()
+                
+                def save_edit():
+                    new_task = edit_entry.get().strip()
+                    if new_task:
+                        self.tasks[selected_index] = new_task
+                        self.update_task_list()
+                        self.save_tasks()
+                        edit_window.destroy()
+                    else:
+                        messagebox.showwarning("Warning", "Task cannot be empty.")
+                
+                tk.Button(
+                    edit_window,
+                    text="Save",
+                    command=save_edit,
+                    font=self.button_font,
+                    bg=self.accent_color,
+                    fg=self.text_color,
+                    activebackground=self.accent_hover,
+                    activeforeground=self.text_color,
+                    relief=tk.FLAT,
+                    bd=0,
+                    cursor="hand2"
+                ).pack(pady=10)
+                
+                edit_entry.bind("<Return>", lambda event: save_edit())
+            else:
+                messagebox.showinfo("Info", "You can only edit active tasks.")
+        except IndexError:
+            messagebox.showwarning("Warning", "Please select a task to edit.")
+    
+    def clear_completed(self):
+        if self.completed_tasks:
+            result = messagebox.askyesno("Clear All", "Are you sure you want to clear all completed tasks?")
+            if result:
+                self.completed_tasks.clear()
+                self.update_task_list()
+                self.update_stats()
+                self.save_tasks()
+                messagebox.showinfo("Cleared", "All completed tasks have been cleared.")
+        else:
+            messagebox.showinfo("Info", "No completed tasks to clear.")
+    
+    def update_task_list(self):
+        # Update active tasks listbox
+        self.task_listbox.delete(0, tk.END)
+        for task in self.tasks:
+            self.task_listbox.insert(tk.END, task)
+        
+        # Update completed tasks listbox
+        self.completed_listbox.delete(0, tk.END)
+        for task in self.completed_tasks:
+            self.completed_listbox.insert(tk.END, task)
+    
+    def update_stats(self):
+        total = len(self.tasks) + len(self.completed_tasks)
+        completed = len(self.completed_tasks)
+        pending = len(self.tasks)
+        
+        stats_text = f"Total: {total} | Completed: {completed} | Pending: {pending}"
+        self.stats_label.config(text=stats_text)
+    
+    def save_tasks(self):
+        data = {
+            "tasks": self.tasks,
+            "completed_tasks": self.completed_tasks
+        }
+        try:
+            with open("tasks.json", "w") as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"Error saving tasks: {e}")
+    
+    def load_tasks(self):
+        if os.path.exists("tasks.json"):
+            try:
+                with open("tasks.json", "r") as f:
+                    data = json.load(f)
+                    self.tasks = data.get("tasks", [])
+                    self.completed_tasks = data.get("completed_tasks", [])
+            except Exception as e:
+                print(f"Error loading tasks: {e}")
+    
+    def exit_app(self):
+        self.save_tasks()
+        self.root.destroy()
+
+# Main window
+root = tk.Tk()
+app = ModernTodoApp(root)
+root.mainloop()
